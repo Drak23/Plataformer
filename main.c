@@ -1,24 +1,4 @@
-/*******************************************************************************************
-*
-*   raylib [core] example - Basic 3d example
-*
-*   Welcome to raylib!
-*
-*   To compile example, just press F5.
-*   Note that compiled executable is placed in the same folder as .c file
-*
-*   You can find all basic examples on C:\raylib\raylib\examples folder or
-*   raylib official webpage: www.raylib.com
-*
-*   Enjoy using raylib. :)
-*
-*   This example has been created using raylib 1.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2013-2024 Ramon Santamaria (@raysan5)
-*
-********************************************************************************************/
-
+ 
 #include "raylib.h"
 
 #if defined(PLATFORM_WEB)
@@ -28,20 +8,27 @@
 //----------------------------------------------------------------------------------
 // Local Variables Definition (local to this module)
 //----------------------------------------------------------------------------------
-//Camera camera = { 0 };
-//Vector3 cubePosition = { 0 };
-//Vector2 ballPosition;
-//Vector2 ballSpeed;
-
-//Vector2 Player1Position;
-//Vector2 Player1Size;
-//Vector2 Player2Position;
-//Vector2 Player2Size;
+Camera camera = { 0 };
+Vector3 cubePosition = { 0 };
 
 //----------------------------------------------------------------------------------
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-static void UpdateDrawFrame(void);          // Update and draw one frame
+static void Update(void);          // Update and draw one frame
+static void ProcessInput(void);
+static void DrawFrame(void);
+
+Texture2D character_sheet;
+typedef struct
+{
+    char* name[32];
+    Rectangle fame[32];
+    float fps;
+    int frameCount;
+    int current;
+} AnimationClip;
+
+AnimationClip animations[3];
 
 //----------------------------------------------------------------------------------
 // Main entry point
@@ -51,10 +38,13 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     const int screenWidth = 800;
-    const int screenHeight = 450;
+    const int screenHeight = 600;
 
-    
+    //Texture2D scarfy = LoadTexture("/reource/Free Street Animal Pixel Art/1 Dog/Idle.png");
+    InitWindow(screenWidth, screenHeight, "raylib");
+    character_sheet = LoadTexture("resources/Free Street Animal Pixel Art/1 Dog/Idle.png");
 
+    //animations[0];
     //--------------------------------------------------------------------------------------
 
 #if defined(PLATFORM_WEB)
@@ -66,7 +56,9 @@ int main()
     // Main game loop
     while (!WindowShouldClose())    // Detect window close button or ESC key
     {
-        UpdateDrawFrame();
+        ProcessInput();
+        Update();
+        DrawFrame();
     }
 #endif
 
@@ -77,9 +69,18 @@ int main()
 
     return 0;
 }
+void Update(void)
+{
+    
+}
+
+void ProcessInput(void)
+{
+
+}
 
 // Update and draw game frame
-static void UpdateDrawFrame(void)
+static void DrawFrame(void)
 {
     // Update
     //----------------------------------------------------------------------------------
@@ -92,19 +93,19 @@ static void UpdateDrawFrame(void)
     //if (IsKeyDown(KEY_DOWN)) Player2Position.y += 2.0f;
 
     
-    
+     
 
     // Draw
     //----------------------------------------------------------------------------------
     BeginDrawing();
-        //ClearBackground(BLACK);
+        
+        ClearBackground(BEIGE);
 
-        //DrawCircleV(ballPosition, 15, RED);
-        //DrawRectangleV(Player1Position, Player1Size, BLUE);
-        //DrawRectangleV(Player2Position, Player2Size, GREEN);
+        DrawTextureRec(character_sheet,(Rectangle){0,0,48,48},(Vector2){400,300},WHITE);
 
-        //DrawFPS(10, 10);
+    
 
     EndDrawing();
     //----------------------------------------------------------------------------------
 }
+
