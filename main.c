@@ -1,6 +1,19 @@
+// main.c
+// Juego plataforma 2D con menú, música, sprites separados y animación de personaje.
+// ARREGLADO + Animación independiente de enemigos
+
 #include "raylib.h"
-#include "animation.c"
+
+// ------------------------------
+// INCLUSIÓN DE MÓDULOS .C (NO .H)
+// ------------------------------
+#include "animation.c"          // Animación del jugador
+#include "enemy_sprites.c"    // Animación independiente de enemigos
 #include "playercamera.c"
+
+#include "menu_sprites.c"       // Sprites del menú
+#include "music.c"              // Música del menú y juego
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -12,8 +25,13 @@
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 576
 #define NUM_SHOOTS 50
+#define MAX_PLATFORMS 64
+#define MAX_ENEMIES 16
+#define MAX_COLLECTIBLES 32
 
-// --- Datos del juego ---
+// ------------------------------
+// Estructuras de datos
+// ------------------------------
 typedef struct Player {
     Vector2 pos;
     Vector2 vel;
@@ -23,7 +41,7 @@ typedef struct Player {
     int score;
 } Player;
 
-typedef struct Shoot{
+typedef struct Shoot {
     Rectangle rec;
     Vector2 speed;
     bool active;
@@ -32,13 +50,14 @@ typedef struct Shoot{
 
 typedef struct Platform {
     Rectangle box;
+    int type;      // 0..2 plataformas, 3 = suelo
 } Platform;
 
 typedef struct Enemy {
     Vector2 pos;
     Vector2 vel;
     Rectangle box;
-    int dir;
+    int dir;        // 1 derecha, -1 izquierda
     bool active;
 } Enemy;
 
@@ -48,114 +67,190 @@ typedef struct Collectible {
     bool taken;
 } Collectible;
 
-// ----------------------------------------------------------------
-static bool gameOver = false;
-static bool pauseGame = false;
-static bool victory = false;
-static Player player = { 0 };
+// ------------------------------
+// Variables Globales
+// ------------------------------
+static Player player;
 static Shoot shoot[NUM_SHOOTS] = { 0 };
+static Platform platforms[MAX_PLATFORMS];
+static Enemy enemies[MAX_ENEMIES];
+static Collectible collectibles[MAX_COLLECTIBLES];
 static int shootRate = 0;
 
-#define MAX_PLATFORMS 64
-#define MAX_ENEMIES 16
-#define MAX_COLLECTIBLES 32
-
-static Platform platforms[MAX_PLATFORMS];
 static int platformCount = 0;
-
-static Enemy enemies[MAX_ENEMIES];
 static int enemyCount = 0;
-
-static Collectible collectibles[MAX_COLLECTIBLES];
 static int collectibleCount = 0;
 
 static Camera2D camera;
+
+static bool gameOver = false;
+static bool victory = false;
+static bool pauseGame = false;
 
 const float GRAVITY = 1200.0f;
 const float MOVE_SPEED = 240.0f;
 const float JUMP_SPEED = 520.0f;
 const float SHOOT_SPEED = 800.0f;
 
-// -------------------- UTILIDADES -------------------------
+// Texturas de plataformas y suelo
+static Texture2D platformTex[3];
+static Texture2D groundTex;
+
+// ------------------------------
+// Menú (pantallas)
+// ------------------------------
+typedef enum { LOGO = 0, TITLE, CREDITS, GAMEPLAY, ENDING } GameScreen;
+static int currentScreen = TITLE;
+
+static int optionSelect = 0;
+
+
+// ------------------------------
+// Prototipos
+// ------------------------------
+Rectangle GetPlayerBox(Player *p);
+bool CheckCollisionRectangles(Rectangle a, Rectangle b);
+void AddPlatform(float x, float y, float w, float h, int type);
+void AddEnemy(float x, float y);
+void AddCollectible(float x, float y);
+void InitShoots(void);
+void ResetLevel(void);
+
+void UpdatePlayer(float dt);
+void UpdateEnemies(float dt);
+void UpdateCollectibles(void);
+void UpdateShoots(float dt);
+
+void LoadResources(void);
+void UnloadResources(void);
+
+
+// ------------------------------
+// Utilidades
+// ------------------------------
 Rectangle GetPlayerBox(Player *p) {
-    return (Rectangle){p->pos.x - p->box.width/2.0f, p->pos.y - p->box.height, p->box.width, p->box.height};
+    return (Rectangle){
+        p->pos.x - p->box.width/2,
+        p->pos.y - p->box.height,
+        p->box.width,
+        p->box.height
+    };
 }
 
 bool CheckCollisionRectangles(Rectangle a, Rectangle b) {
-    return !(a.x + a.width < b.x || a.x > b.x + b.width ||
-             a.y + a.height < b.y || a.y > b.y + b.height);
+    return !(a.x + a.width < b.x ||
+             a.x > b.x + b.width ||
+             a.y + a.height < b.y ||
+             a.y > b.y + b.height);
 }
 
-void AddPlatform(float x, float y, float w, float h) {
-    if (platformCount >= MAX_PLATFORMS) return;
-    platforms[platformCount++].box = (Rectangle){x,y,w,h};
+void AddPlatform(float x, float y, float w, float h, int type) {
+    platforms[platformCount].box = (Rectangle){x,y,w,h};
+    platforms[platformCount].type = type;
+    platformCount++;
 }
 
 void AddEnemy(float x, float y) {
-    if (enemyCount >= MAX_ENEMIES) return;
-
     enemies[enemyCount].pos = (Vector2){x,y};
-    enemies[enemyCount].vel = (Vector2){40.0f,0};
+    enemies[enemyCount].vel = (Vector2){40,0};
     enemies[enemyCount].dir = -1;
-    enemies[enemyCount].active = true;
     enemies[enemyCount].box = (Rectangle){x-16,y-32,32,32};
+    enemies[enemyCount].active = true;
     enemyCount++;
 }
 
 void AddCollectible(float x, float y) {
-    if (collectibleCount >= MAX_COLLECTIBLES) return;
-
     collectibles[collectibleCount].pos = (Vector2){x,y};
-    collectibles[collectibleCount].box = (Rectangle){x-10,y-10,20,20};
+    collectibles[collectibleCount].box = (Rectangle){x-8,y-8,16,16};
     collectibles[collectibleCount].taken = false;
     collectibleCount++;
 }
 
 void InitShoots() {
-    for (int i = 0; i < NUM_SHOOTS; i++) {
+    for (int i=0;i<NUM_SHOOTS;i++) {
         shoot[i].rec = (Rectangle){0,0,10,5};
-        shoot[i].speed = (Vector2){SHOOT_SPEED, 0};
+        shoot[i].speed = (Vector2){SHOOT_SPEED,0};
         shoot[i].active = false;
         shoot[i].color = MAROON;
     }
 }
 
-// -------------------- RESET LEVEL -------------------------
+
+// ------------------------------
+// Cargar todos los recursos
+// ------------------------------
+void LoadResources() {
+
+    LoadMenuSprites();
+    LoadEnemyAnimations();
+
+    LoadMusicTracks();
+    PlayMenuMusic();
+
+    platformTex[0] = LoadTexture("resources/Sprites/Plataformas/platform_1.png");
+    platformTex[1] = LoadTexture("resources/Sprites/Plataformas/platform_2.png");
+    platformTex[2] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+
+    //Fondo nivel
+    groundTex = LoadTexture("resources/Sprites/Plataformas");
+
+    LoadPlayerAnimations();
+    LoadEnemyAnimations(); // ← NUEVO
+}
+
+
+// ------------------------------
+// Descargar recursos
+// ------------------------------
+void UnloadResources() {
+    UnloadMenuSprites();
+    LoadEnemyAnimations();
+    UnloadMusicTracks();
+
+    UnloadTexture(platformTex[0]);
+    UnloadTexture(platformTex[1]);
+    UnloadTexture(platformTex[2]);
+
+    UnloadTexture(groundTex);
+
+    UnloadPlayerSprites();
+    UnloadEnemySprites(); // ← NUEVO
+}
+
+
+// ------------------------------
+// Reset del nivel
+// ------------------------------
 void ResetLevel() {
 
-    player.pos = (Vector2){120, 300};
+    player.pos = (Vector2){120,300};
     player.vel = (Vector2){0,0};
     player.box = (Rectangle){0,0,28,64};
-    player.onGround = false;
     player.lives = 3;
     player.score = 0;
+    player.onGround = false;
 
     camera.target = player.pos;
-    camera.offset = (Vector2){SCREEN_WIDTH/2.0f, SCREEN_HEIGHT/2.0f};
-    camera.rotation = 0;
-    camera.zoom = 1.0f;
+    camera.offset = (Vector2){SCREEN_WIDTH/2, 450};
+    camera.zoom = 1.5f;
 
     platformCount = 0;
     enemyCount = 0;
     collectibleCount = 0;
 
-    AddPlatform(-500, 420, 2000, 160);
-    AddPlatform(400, 340, 200, 24);
-    AddPlatform(700, 280, 160, 24);
-    AddPlatform(920, 220, 120, 24);
-    AddPlatform(1200, 300, 280, 24);
-    AddPlatform(1560, 360, 100, 24);
-    AddPlatform(1700, 260, 200, 24);
-    AddPlatform(1960, 360, 240, 24);
+    //suelo
+    AddPlatform(-500,420,20000,1600,3);
 
-    AddEnemy(680, 248);
-    AddEnemy(1500, 232);
-    AddEnemy(2000, 328);
+    AddPlatform(400,340,200,24,0);
+    AddPlatform(700,280,160,24,1);
+    AddPlatform(920,220,120,24,2);
 
-    AddCollectible(460, 300);
-    AddCollectible(730, 240);
-    AddCollectible(1240, 260);
-    AddCollectible(1720, 220);
+    AddEnemy(680,248);
+    AddEnemy(1500,232);
+    AddEnemy(2000,328);
+
+    AddCollectible(460,300);
+    AddCollectible(730,240);
 
     InitShoots();
     shootRate = 0;
@@ -165,20 +260,42 @@ void ResetLevel() {
     pauseGame = false;
 }
 
-// ----------------------- UPDATE -------------------------
+
+// ------------------------------
+// Actualizar jugador
+// ------------------------------
 void UpdatePlayer(float dt) {
 
     float move = 0;
-    if (IsKeyDown(KEY_D)) move += 1;
-    if (IsKeyDown(KEY_A)) move -= 1;
 
-    player.vel.x = move * MOVE_SPEED;
+    if (IsKeyDown(KEY_D)) {
+        move += 1;
+        facingRight = true;
+        playerState = PLAYER_WALK;
+    }
+    else if (IsKeyDown(KEY_A)) {
+        move -= 1;
+        facingRight = false;
+        playerState = PLAYER_WALK;
+    }
+    else {
+        playerState = PLAYER_IDLE;
+    }
 
     if ((IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_Z)) && player.onGround) {
         player.vel.y = -JUMP_SPEED;
         player.onGround = false;
     }
 
+    switch (playerState) {
+        case PLAYER_IDLE:  UpdateAnimation(&idleAnim, dt);  break;
+        case PLAYER_WALK:  UpdateAnimation(&walkAnim, dt);  break;
+        case PLAYER_DEATH: UpdateAnimation(&deathAnim, dt); break;
+    }
+
+    player.vel.x = move * MOVE_SPEED;
+
+        // Disparar
     if (IsKeyDown(KEY_X)) {
         shootRate++;
         if (shootRate % 12 == 0) {
@@ -195,24 +312,20 @@ void UpdatePlayer(float dt) {
     } else shootRate = 0;
 
     player.vel.y += GRAVITY * dt;
-
     player.pos.x += player.vel.x * dt;
     player.pos.y += player.vel.y * dt;
 
     player.box = GetPlayerBox(&player);
-
     player.onGround = false;
 
     for (int i=0;i<platformCount;i++) {
 
         Rectangle p = platforms[i].box;
-        if (CheckCollisionRectangles(player.box, p)) {
 
+        if (CheckCollisionRectangles(player.box, p)) {
             float prevY = player.pos.y - player.vel.y * dt;
 
-            Rectangle prev = { player.box.x, prevY - player.box.height, player.box.width, player.box.height};
-
-            if (prev.y + prev.height <= p.y + 1) {
+            if (prevY <= p.y) {
                 player.pos.y = p.y;
                 player.vel.y = 0;
                 player.onGround = true;
@@ -225,44 +338,58 @@ void UpdatePlayer(float dt) {
         player.pos = (Vector2){120,300};
     }
 
-    if (player.lives <= 0) gameOver = true;
+    if (player.lives <= 0) {
+        gameOver = true;
+    }
 }
 
-void UpdateEnemies(float dt) { 
-    for (int i=0;i<enemyCount;i++) { 
-        if (!enemies[i].active) continue; 
-        Enemy *e = &enemies[i]; 
-        // simple patrol 
-        e->pos.x += e->vel.x * e->dir * dt; 
-        e->box.x = e->pos.x - e->box.width/2.0f; 
-        e->box.y = e->pos.y - e->box.height; 
-        // reverse when reaching edges of platform below 
-        bool onPlatform = false; 
-        for (int j=0;j<platformCount;j++) { 
-            Rectangle pb = platforms[j].box; 
-            if (e->pos.x > pb.x && e->pos.x < pb.x + pb.width && fabs(e->pos.y - pb.y) < 48) { 
-                onPlatform = true; 
-                break; 
-            } 
-        } 
-        if (!onPlatform) e->dir *= -1; 
-        // Collision with player 
-        if (CheckCollisionRectangles(e->box, GetPlayerBox(&player))) { 
-                // If player is falling and hits the enemy from above -> kill enemy 
-                if (player.vel.y > 200.0f) { 
-                e->active = false; player.vel.y = -JUMP_SPEED*0.4f; 
-                // bounce 
-                player.score += 100; 
-            } else { 
-            // Player damaged 
-            player.lives -= 1; 
-            player.pos = (Vector2){120,300}; 
-            player.vel = (Vector2){0,0}; 
-            } 
-        } 
-    } 
+
+// ------------------------------
+// Actualizar enemigos (MOVIMIENTO + ANIMACIÓN)
+// ------------------------------
+void UpdateEnemies(float dt) {
+
+    UpdateAllEnemyAnimations(dt); // ← ANIMACIÓN AUTOMÁTICA
+
+    for (int i=0;i<enemyCount;i++) {
+        if (!enemies[i].active) continue;
+
+        Enemy *e = &enemies[i];
+
+        e->pos.x += e->vel.x * e->dir * dt;
+        e->box.x = e->pos.x - e->box.width/2.0f;
+        e->box.y = e->pos.y - e->box.height;
+
+        bool onPlatform = false;
+        for (int j=0;j<platformCount;j++) {
+            Rectangle pb = platforms[j].box;
+            if (e->pos.x > pb.x && e->pos.x < pb.x + pb.width && fabs(e->pos.y - pb.y) < 48) {
+                onPlatform = true;
+                break;
+            }
+        }
+        if (!onPlatform)
+            e->dir *= -1;
+
+        if (CheckCollisionRectangles(e->box, GetPlayerBox(&player))) {
+            if (player.vel.y > 200.0f) {
+                e->active = false;
+                player.vel.y = -JUMP_SPEED*0.4f;
+                player.score += 100;
+            }
+            else {
+                player.lives -= 1;
+                player.pos = (Vector2){120,300};
+                player.vel = (Vector2){0,0};
+            }
+        }
+    }
 }
 
+
+// ------------------------------
+// Actualizar objetos
+// ------------------------------
 void UpdateCollectibles() {
     for (int i=0;i<collectibleCount;i++) {
         if (!collectibles[i].taken &&
@@ -273,8 +400,11 @@ void UpdateCollectibles() {
     }
 }
 
-void UpdateShoots(float dt) {
 
+// ------------------------------
+// Disparos
+// ------------------------------
+void UpdateShoots(float dt) {
     for (int i=0;i<NUM_SHOOTS;i++) {
         if (!shoot[i].active) continue;
 
@@ -287,123 +417,178 @@ void UpdateShoots(float dt) {
                 enemies[e].active = false;
                 shoot[i].active = false;
                 player.score += 100;
-                break;
             }
         }
     }
 }
 
-// ------------------- MAIN -------------------------------
+
+
+// ------------------------------
+// MAIN
+// ------------------------------
 int main(void) {
 
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Dragon Legends - Nivel 1");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Dragon Legends");
     SetTargetFPS(60);
 
-    LoadPlayerSprite();
+    LoadResources();
     ResetLevel();
 
     while (!WindowShouldClose()) {
 
         float dt = GetFrameTime();
 
-        // Entradas: toggle PAUSA y reinicio
-        if (IsKeyPressed(KEY_P)) pauseGame = !pauseGame;
-        if (IsKeyPressed(KEY_R)) ResetLevel();
+        UpdateAllMusic();
 
-        // Si ya perdiste -> mostrar pantalla de GAME OVER y saltar la simulación
-        if (gameOver) {
+        // ------------------------------
+        // PANTALLA DE MENÚ
+        // ------------------------------
+        if (currentScreen == TITLE) {
+
+            if (IsKeyPressed(KEY_DOWN)) optionSelect++;
+            if (IsKeyPressed(KEY_UP)) optionSelect--;
+
+            if (optionSelect < 0) optionSelect = 0;
+            if (optionSelect > 2) optionSelect = 2;
+
+            if (IsKeyPressed(KEY_ENTER)) {
+
+                if (optionSelect == 0) {
+                    currentScreen = GAMEPLAY;
+                    PlayGameMusic();
+                }
+                else if (optionSelect == 1)
+                    currentScreen = CREDITS;
+                else if (optionSelect == 2)
+                    break;
+            }
+
             BeginDrawing();
-            ClearBackground(BLACK);
-            DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 40, 40, RED);
-            DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, WHITE);
+            ClearBackground(RAYWHITE);
+
+            // Logo
+            DrawTexture(texLogo, SCREEN_WIDTH/2 - texLogo.width/2, 80, BLUE);
+
+            // Botones
+            int bx = SCREEN_WIDTH/2 - texButtonIdle.width/2;
+            int by = 300;
+
+            for (int i=0;i<3;i++) {
+
+                Texture2D *btn = (i==optionSelect)
+                    ? &texButtonSelected
+                    : &texButtonIdle;
+
+                DrawTexture(*btn, bx, by + i*70, WHITE);
+
+                const char *label =
+                    (i==0) ? "JUGAR" :
+                    (i==1) ? "CREDITOS" :
+                             "SALIR";
+
+                DrawText(label, bx + 70, by + i*70 + 20, 24, BLACK);
+            }
+
             EndDrawing();
             continue;
         }
 
-        // Si ganaste -> mostrar pantalla de VICTORIA y saltar la simulación
-        if (victory) {
+        // ------------------------------
+        // CRÉDITOS
+        // ------------------------------
+        if (currentScreen == CREDITS) {
+
+            if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+
             BeginDrawing();
-            ClearBackground(WHITE);
-            DrawText("¡VICTORIA!", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 40, 40, DARKGREEN);
-            DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, BLACK);
+            ClearBackground(RAYWHITE);
+            DrawText("CREDITOS", 420, 80, 40, DARKBLUE);
+            DrawText("Desarrollador: Diego (tu)", 350, 180, 24, BLACK);
+            DrawText("ENTER para regresar", 360, 500, 20, GRAY);
             EndDrawing();
             continue;
         }
 
-        // Si está pausado -> mostrar pantalla de pausa y saltar la lógica
-        if (pauseGame) {
+        // ------------------------------
+        // GAMEPLAY
+        // ------------------------------
+        if (currentScreen == GAMEPLAY) {
+
+            if (IsKeyPressed(KEY_P)) pauseGame = !pauseGame;
+
+            if (!pauseGame && !gameOver && !victory) {
+                UpdatePlayer(dt);
+                UpdateEnemies(dt);
+                UpdateCollectibles();
+                UpdateShoots(dt);
+            }
+
+            UpdatePlayerCamera(&camera, player.pos);
+
             BeginDrawing();
-            ClearBackground(BLACK);
-            DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+            ClearBackground(SKYBLUE);
+
+            BeginMode2D(camera);
+
+            // Plataformas
+            for (int i=0;i<platformCount;i++) {
+
+                Rectangle b = platforms[i].box;
+
+                if (platforms[i].type == 3) {
+                    DrawTexturePro(
+                        groundTex,
+                        (Rectangle){0,0, groundTex.width, groundTex.height},
+                        (Rectangle){b.x, b.y - b.height, b.width, b.height},
+                        (Vector2){0,0}, 0, WHITE
+                    );
+                }
+                else {
+                    Texture2D *t = &platformTex[platforms[i].type];
+
+                    DrawTexturePro(
+                        *t,
+                        (Rectangle){0,0,t->width,t->height},
+                        (Rectangle){b.x, b.y - b.height, b.width, b.height},
+                        (Vector2){0,0}, 0, WHITE
+                    );
+                }
+            }
+
+            // ------------------------------
+            // DIBUJAR ENEMIGOS ANIMADOS
+            // ------------------------------
+            for (int i=0;i<enemyCount;i++) {
+                if (!enemies[i].active) continue;
+
+                DrawEnemyAnimation(enemies[i].pos, enemies[i].dir, 1); // 1 = caminar
+            }
+
+            // Coleccionables
+            for (int i=0;i<collectibleCount;i++) {
+                if (!collectibles[i].taken)
+                    DrawCircleV(collectibles[i].pos, 8, GOLD);
+            }
+
+            // Proyectiles
+            for (int i=0;i<NUM_SHOOTS;i++)
+                if (shoot[i].active)
+                    DrawRectangleRec(shoot[i].rec, MAROON);
+
+            // Jugador
+            DrawPlayer(player.pos);
+
+            EndMode2D();
+
+            DrawText(TextFormat("Vidas: %d", player.lives), 20, 20, 24, BLACK);
+            DrawText(TextFormat("Puntaje: %d", player.score), 20, 60, 24, BLACK);
+
             EndDrawing();
-            continue;
         }
-
-        // Actualizar solo si no está en pausa, gameOver ni victory
-        if (!pauseGame && !gameOver && !victory) {
-            UpdatePlayer(dt);
-            UpdateEnemies(dt);
-            UpdateCollectibles();
-            UpdateShoots(dt);
-        }
-
-        // WIN CONDITION: Llegar a la META (x >= 2200)
-        if (player.pos.x >= 2200 && !victory) {
-            victory = true;
-        }
-
-        UpdatePlayerCamera(&camera, player.pos);
-
-        // --- DIBUJO ---
-        BeginDrawing();
-        ClearBackground(SKYBLUE);
-        BeginMode2D(camera);
-
-        // Parallax background (very simple shapes)
-        DrawRectangle(-1000, 100, 3000, 300, DARKBLUE);
-        DrawRectangle(200, 80, 300, 200, PURPLE);
-        DrawRectangle(800, 60, 280, 220, DARKPURPLE);
-
-        // Ground and platforms
-        for (int i=0;i<platformCount;i++) {
-            Rectangle b = platforms[i].box;
-            DrawRectangleRec(b, BROWN);
-            DrawRectangleLinesEx(b, 2, BLACK);
-        }
-
-        // coleccionables
-        for (int i=0;i<collectibleCount;i++) {
-            if (!collectibles[i].taken)
-                DrawCircleV(collectibles[i].pos, 8, GOLD);
-        }
-
-        // enemigos
-        for (int i=0;i<enemyCount;i++) {
-            if (enemies[i].active)
-                DrawRectangleRec(enemies[i].box, RED);
-        }
-
-        // jugador (sprite)
-        DrawPlayerSprite(GetPlayerBox(&player));
-
-        // balas
-        for (int i=0;i<NUM_SHOOTS;i++)
-            if (shoot[i].active)
-                DrawRectangleRec(shoot[i].rec, MAROON);
-
-        // Level end marker (goal)
-        DrawRectangle(2200, 0, 8, 800, GREEN);
-        DrawText("META", 2190, -20, 20, BLACK);
-
-        EndMode2D();
-
-        DrawText(TextFormat("Vidas: %d", player.lives), 10, 10, 20, BLACK);
-        DrawText(TextFormat("Puntaje: %d", player.score), 10, 40, 20, BLACK);
-
-        EndDrawing();
     }
 
-    UnloadPlayerSprite();
+    UnloadResources();
     CloseWindow();
     return 0;
 }
