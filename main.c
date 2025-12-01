@@ -187,12 +187,14 @@ void LoadResources() {
     LoadMusicTracks();
     PlayMenuMusic();
 
-    platformTex[0] = LoadTexture("resources/Sprites/Plataformas/platform_1.png");
-    platformTex[1] = LoadTexture("resources/Sprites/Plataformas/platform_2.png");
+    platformTex[0] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[1] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
     platformTex[2] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[3] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[4] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
 
     //Fondo nivel
-    groundTex = LoadTexture("resources/Sprites/Plataformas");
+    groundTex = LoadTexture("resources/Sprites/Plataformas/cielo.png");
 
     LoadPlayerAnimations();
     LoadEnemyAnimations(); // ← NUEVO
@@ -210,6 +212,8 @@ void UnloadResources() {
     UnloadTexture(platformTex[0]);
     UnloadTexture(platformTex[1]);
     UnloadTexture(platformTex[2]);
+    UnloadTexture(platformTex[3]);
+    UnloadTexture(platformTex[4]);
 
     UnloadTexture(groundTex);
 
@@ -239,15 +243,18 @@ void ResetLevel() {
     collectibleCount = 0;
 
     //suelo
-    AddPlatform(-500,420,20000,1600,3);
+    AddPlatform(-500,420,20000,1600,4);
 
+    //Plataformas
     AddPlatform(400,340,200,24,0);
     AddPlatform(700,280,160,24,1);
     AddPlatform(920,220,120,24,2);
+    AddPlatform(1120,220,120,24,3);
 
-    AddEnemy(680,248);
-    AddEnemy(1500,232);
-    AddEnemy(2000,328);
+    //Enemigos
+    AddEnemy(780,280);   // plataforma 1
+    AddEnemy(980,220);   // plataforma 2
+    AddEnemy(1180,220);   // plataforma 3
 
     AddCollectible(460,300);
     AddCollectible(730,240);
@@ -268,6 +275,7 @@ void UpdatePlayer(float dt) {
 
     float move = 0;
 
+    // MOVIMIENTO → ANIMACIÓN
     if (IsKeyDown(KEY_D)) {
         move += 1;
         facingRight = true;
@@ -287,6 +295,7 @@ void UpdatePlayer(float dt) {
         player.onGround = false;
     }
 
+    // Actualizar animación según estado
     switch (playerState) {
         case PLAYER_IDLE:  UpdateAnimation(&idleAnim, dt);  break;
         case PLAYER_WALK:  UpdateAnimation(&walkAnim, dt);  break;
@@ -294,6 +303,12 @@ void UpdatePlayer(float dt) {
     }
 
     player.vel.x = move * MOVE_SPEED;
+
+     // Si muere
+    if (player.lives <= 0 && playerState != PLAYER_DEATH) {
+        playerState = PLAYER_DEATH;
+        ResetAnimation(&deathAnim);
+    }
 
         // Disparar
     if (IsKeyDown(KEY_X)) {
@@ -311,6 +326,7 @@ void UpdatePlayer(float dt) {
         }
     } else shootRate = 0;
 
+    // FÍSICAS
     player.vel.y += GRAVITY * dt;
     player.pos.x += player.vel.x * dt;
     player.pos.y += player.vel.y * dt;
@@ -318,6 +334,7 @@ void UpdatePlayer(float dt) {
     player.box = GetPlayerBox(&player);
     player.onGround = false;
 
+    // COLISIONES
     for (int i=0;i<platformCount;i++) {
 
         Rectangle p = platforms[i].box;
@@ -333,6 +350,7 @@ void UpdatePlayer(float dt) {
         }
     }
 
+    // Caer al vacío
     if (player.pos.y > 1400) {
         player.lives--;
         player.pos = (Vector2){120,300};
@@ -340,6 +358,15 @@ void UpdatePlayer(float dt) {
 
     if (player.lives <= 0) {
         gameOver = true;
+    }
+    
+    // GAME OVER al terminar animación de muerte
+    if (player.lives <= 0) {
+        playerState = PLAYER_DEATH;
+
+        if (IsAnimationFinished(&deathAnim)) {
+            gameOver = true;
+        }
     }
 }
 
@@ -349,42 +376,117 @@ void UpdatePlayer(float dt) {
 // ------------------------------
 void UpdateEnemies(float dt) {
 
-    UpdateAllEnemyAnimations(dt); // ← ANIMACIÓN AUTOMÁTICA
+    UpdateAllEnemyAnimations(dt); // ← animaciones
 
-    for (int i=0;i<enemyCount;i++) {
-        if (!enemies[i].active) continue;
-
+    for (int i = 0; i < enemyCount; i++) {
         Enemy *e = &enemies[i];
+        if (!e->active) continue;
 
-        e->pos.x += e->vel.x * e->dir * dt;
-        e->box.x = e->pos.x - e->box.width/2.0f;
+        // velocidad horizontal prevista
+        float stepX = e->vel.x * e->dir * dt;
+        float nextX = e->pos.x + stepX;
+
+        // actualizar caja según pos actual (antes de mover)
+        e->box.x = e->pos.x - e->box.width / 2.0f;
         e->box.y = e->pos.y - e->box.height;
 
-        bool onPlatform = false;
-        for (int j=0;j<platformCount;j++) {
+        // Buscar la plataforma actual (si existe) en la que está apoyado el enemigo
+        int currentPlat = -1;
+        for (int j = 0; j < platformCount; j++) {
             Rectangle pb = platforms[j].box;
-            if (e->pos.x > pb.x && e->pos.x < pb.x + pb.width && fabs(e->pos.y - pb.y) < 48) {
-                onPlatform = true;
-                break;
+            // Consideramos que el enemigo está "sobre" la plataforma si su X está dentro
+            // y su Y está cerca de la Y de la plataforma.
+            if (e->pos.x >= pb.x && e->pos.x <= pb.x + pb.width) {
+                float dy = e->pos.y - pb.y;
+                if (dy >= -8.0f && dy <= 48.0f) { // tolerancia vertical razonable
+                    currentPlat = j;
+                    break;
+                }
             }
         }
-        if (!onPlatform)
-            e->dir *= -1;
 
+        // Si está sobre una plataforma, fijar su Y a la plataforma (evita desalineaciones)
+        if (currentPlat >= 0) {
+            Rectangle pb = platforms[currentPlat].box;
+            e->pos.y = pb.y;
+            e->box.y = e->pos.y - e->box.height;
+        }
+
+        // Decidir si avanzar o girar:
+        bool shouldTurn = false;
+
+        if (currentPlat >= 0) {
+            // Si avanza, ¿se saldría del ancho de la plataforma?
+            Rectangle pb = platforms[currentPlat].box;
+            float projectedFeetX = nextX; // usamos la X del "centro" del enemigo
+            // margen para evitar "pegado" al borde:
+            const float EDGE_MARGIN = 6.0f;
+
+            if (projectedFeetX < pb.x + EDGE_MARGIN || projectedFeetX > pb.x + pb.width - EDGE_MARGIN) {
+                shouldTurn = true;
+            } else {
+                // además comprobamos colisiones laterales con el "volumen" de la plataforma (paredes)
+                Rectangle nextBox = e->box;
+                nextBox.x = nextX - e->box.width / 2.0f;
+
+                // pared izquierda
+                if (CheckCollisionRectangles(nextBox, (Rectangle){pb.x - 2.0f, pb.y - pb.height, 2.0f, pb.height})) {
+                    shouldTurn = true;
+                }
+                // pared derecha
+                if (CheckCollisionRectangles(nextBox, (Rectangle){pb.x + pb.width, pb.y - pb.height, 2.0f, pb.height})) {
+                    shouldTurn = true;
+                }
+            }
+        } else {
+            // Si no está sobre ninguna plataforma: buscar si hay plataforma justo delante (paso en vacío)
+            bool platformAhead = false;
+            for (int j = 0; j < platformCount; j++) {
+                Rectangle pb = platforms[j].box;
+                // ver si la X prevista cae dentro de alguna plataforma y la Y es coherente
+                if (nextX >= pb.x && nextX <= pb.x + pb.width) {
+                    float dy = e->pos.y - pb.y;
+                    if (dy >= -16.0f && dy <= 48.0f) {
+                        platformAhead = true;
+                        break;
+                    }
+                }
+            }
+            // si no hay plataforma adelante, girar
+            if (!platformAhead) shouldTurn = true;
+        }
+
+        if (shouldTurn) {
+            e->dir *= -1;
+            // ajustar posición para evitar quedar 'pegado' fuera del borde
+            e->pos.x += e->vel.x * e->dir * dt;
+        } else {
+            // avanzar
+            e->pos.x = nextX;
+        }
+
+        // actualizar caja final
+        e->box.x = e->pos.x - e->box.width / 2.0f;
+        e->box.y = e->pos.y - e->box.height;
+
+        // Colisión con jugador
         if (CheckCollisionRectangles(e->box, GetPlayerBox(&player))) {
             if (player.vel.y > 200.0f) {
+                // jugador salta encima -> enemigo muere
                 e->active = false;
-                player.vel.y = -JUMP_SPEED*0.4f;
+                player.vel.y = -JUMP_SPEED * 0.4f;
                 player.score += 100;
-            }
-            else {
-                player.lives -= 1;
+            } else {
+                // daño al jugador
+                player.lives--;
                 player.pos = (Vector2){120,300};
                 player.vel = (Vector2){0,0};
             }
         }
     }
 }
+
+
 
 
 // ------------------------------
@@ -463,6 +565,7 @@ int main(void) {
                 else if (optionSelect == 2)
                     break;
             }
+        
 
             BeginDrawing();
             ClearBackground(RAYWHITE);
@@ -472,7 +575,7 @@ int main(void) {
 
             // Botones
             int bx = SCREEN_WIDTH/2 - texButtonIdle.width/2;
-            int by = 300;
+            int by = 350;
 
             for (int i=0;i<3;i++) {
 
@@ -487,7 +590,7 @@ int main(void) {
                     (i==1) ? "CREDITOS" :
                              "SALIR";
 
-                DrawText(label, bx + 70, by + i*70 + 20, 24, BLACK);
+                DrawText(label, bx + 80, by + i*70 + 20, 24, BLACK);
             }
 
             EndDrawing();
@@ -504,7 +607,7 @@ int main(void) {
             BeginDrawing();
             ClearBackground(RAYWHITE);
             DrawText("CREDITOS", 420, 80, 40, DARKBLUE);
-            DrawText("Desarrollador: Diego (tu)", 350, 180, 24, BLACK);
+            DrawText("Desarrollador: Diego ", 350, 180, 24, BLACK);
             DrawText("ENTER para regresar", 360, 500, 20, GRAY);
             EndDrawing();
             continue;
@@ -516,6 +619,7 @@ int main(void) {
         if (currentScreen == GAMEPLAY) {
 
             if (IsKeyPressed(KEY_P)) pauseGame = !pauseGame;
+            if (IsKeyPressed(KEY_R)) ResetLevel();
 
             if (!pauseGame && !gameOver && !victory) {
                 UpdatePlayer(dt);
@@ -524,19 +628,60 @@ int main(void) {
                 UpdateShoots(dt);
             }
 
+            // GAME OVER SCREEN
+            if (gameOver) {
+                BeginDrawing();
+                ClearBackground(BLACK);
+                DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 40, 40, RED);
+                DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, WHITE);
+                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+                DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                EndDrawing();
+                continue;
+            }
+
+            // VICTORY SCREEN
+            if (victory) {
+                BeginDrawing();
+                ClearBackground(WHITE);
+                DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 40, 40, DARKGREEN);
+                DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, BLACK);
+                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+                DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                EndDrawing();
+                continue;
+            }
+
+            // PAUSA
+            if (pauseGame) {
+                BeginDrawing();
+                ClearBackground(BLACK);
+                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+                DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                EndDrawing();
+                continue;
+            }
+            // WIN CONDITION
+            if (player.pos.x >= 3300 && !victory)
+            victory = true;
+
             UpdatePlayerCamera(&camera, player.pos);
+
 
             BeginDrawing();
             ClearBackground(SKYBLUE);
 
             BeginMode2D(camera);
 
+        
+
             // Plataformas
             for (int i=0;i<platformCount;i++) {
 
                 Rectangle b = platforms[i].box;
 
-                if (platforms[i].type == 3) {
+                if (platforms[i].type == 6) {
                     DrawTexturePro(
                         groundTex,
                         (Rectangle){0,0, groundTex.width, groundTex.height},
@@ -550,11 +695,12 @@ int main(void) {
                     DrawTexturePro(
                         *t,
                         (Rectangle){0,0,t->width,t->height},
-                        (Rectangle){b.x, b.y - b.height, b.width, b.height},
+                        (Rectangle){b.x, b.y - b.height/3, b.width, b.height},
                         (Vector2){0,0}, 0, WHITE
                     );
                 }
             }
+            DrawRectangle(-500,420,20000,1600,BROWN);
 
             // ------------------------------
             // DIBUJAR ENEMIGOS ANIMADOS
@@ -578,6 +724,9 @@ int main(void) {
 
             // Jugador
             DrawPlayer(player.pos);
+
+            DrawRectangle(3300, 0, 8, 800, GREEN);
+            DrawText("META", 3290, -20, 20, BLACK);
 
             EndMode2D();
 
