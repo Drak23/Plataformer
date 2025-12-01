@@ -5,7 +5,7 @@
 #include "raylib.h"
 
 // ------------------------------
-// INCLUSIÓN DE MÓDULOS .C (NO .H)
+// INCLUSIÓN DE MÓDULOS .C
 // ------------------------------
 #include "animation.c"          // Animación del jugador
 #include "enemy_sprites.c"    // Animación independiente de enemigos
