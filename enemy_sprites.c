@@ -83,7 +83,7 @@ void UpdateAllEnemyAnimations(float dt) {
 // ----------------------------------------------------------------------
 void DrawEnemyAnimation(Vector2 pos, int dir, int tipoAnim) {
 
-    Animation *anim =
+    Animation * anim =
         (tipoAnim == 0) ? &enemyIdleAnim :
         (tipoAnim == 1) ? &enemyWalkAnim :
                           &enemyDeathAnim;
