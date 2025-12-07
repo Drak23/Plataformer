@@ -10,7 +10,7 @@ Texture2D texButtonSelected = {0};
 
 // Cargar todos los sprites del menú
 void LoadMenuSprites() {
-    texLogo = LoadTexture("resources/Sprites/Menu/logo.png");
+    texLogo = LoadTexture("resources/Sprites/Menu/Logo.png");
     texButtonIdle = LoadTexture("resources/Sprites/Menu/PixelGUI/PixelGUI/layer3.png");
     texButtonSelected = LoadTexture("resources/Sprites/Menu/PixelGUI/PixelGUI/layer4.png");
 }

@@ -99,7 +99,7 @@ static Texture2D groundTex;
 // ------------------------------
 // Menú (pantallas)
 // ------------------------------
-typedef enum { LOGO = 0, TITLE, CREDITS, GAMEPLAY, ENDING } GameScreen;
+typedef enum { LOGO = 0, TITLE, CREDITS, CONTROLES, GAMEPLAY, ENDING } GameScreen;
 static int currentScreen = TITLE;
 
 static int optionSelect = 0;
@@ -302,6 +302,8 @@ void ResetLevel() {
 // ------------------------------
 void UpdatePlayer(float dt) {
 
+    bool controller = IsGamepadAvailable(0);
+
     float move = 0;
 
     // MOVIMIENTO → ANIMACIÓN
@@ -318,11 +320,41 @@ void UpdatePlayer(float dt) {
     else {
         playerState = PLAYER_IDLE;
     }
+        // --- Movimiento con Gamepad ---
+    if (controller) {
+        float axis = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X);
 
-    if ((IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_Z)) && player.onGround) {
+            if (axis > 0.2f) {
+            move = 1;
+            facingRight = true;
+        }
+        else if (axis < -0.2f) {
+            move = -1;
+            facingRight = false;
+        }
+    }
+
+    // ---------------------
+    // DEFINIR ESTADO DE ANIMACIÓN
+    // ---------------------
+    if (player.lives <= 0) {
+        playerState = PLAYER_DEATH;
+    }
+    else if (move != 0) {
+        playerState = PLAYER_WALK;
+    }
+    else {
+        playerState = PLAYER_IDLE;
+    }
+
+    if ((IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_Z) ||
+        (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
+        && player.onGround) 
+    {
         player.vel.y = -JUMP_SPEED;
         player.onGround = false;
     }
+
 
     // Actualizar animación según estado
     switch (playerState) {
@@ -339,20 +371,19 @@ void UpdatePlayer(float dt) {
         ResetAnimation(&deathAnim);
     }
 
-        // Disparar
-    if (IsKeyPressed(KEY_RIGHT)) {
-        //shootRate++;
-        //if (shootRate % 12 == 0) {
-            for (int i=0; i<NUM_SHOOTS; i++) {
-                if (!shoot[i].active) {
-                    Rectangle box = GetPlayerBox(&player);
-                    shoot[i].rec.x = box.x + box.width;
-                    shoot[i].rec.y = box.y + box.height/2;
-                    shoot[i].active = true;
-                    break;
-                }
+      // Disparar
+    if (IsKeyPressed(KEY_RIGHT) ||
+        (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)))
+    {
+        for (int i=0;i<NUM_SHOOTS;i++) {
+            if (!shoot[i].active) {
+                Rectangle box = GetPlayerBox(&player);
+                shoot[i].rec.x = box.x + box.width;
+                shoot[i].rec.y = box.y + box.height/2;
+                shoot[i].active = true;
+                break;
             }
-        //}
+        }
     } else shootRate = 0;
     
 
@@ -578,51 +609,121 @@ int main(void) {
         // ------------------------------
         if (currentScreen == TITLE) {
 
+            bool controller = IsGamepadAvailable(0);
+
+            // ----------------------------
+            // MOVER CURSOR DEL MENÚ
+            // ----------------------------
+
+            // TECLADO
             if (IsKeyPressed(KEY_DOWN)) optionSelect++;
             if (IsKeyPressed(KEY_UP)) optionSelect--;
 
-            if (optionSelect < 0) optionSelect = 0;
-            if (optionSelect > 2) optionSelect = 2;
+            // GAMEPAD – D-PAD
+            if (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN))
+                optionSelect++;
 
-            if (IsKeyPressed(KEY_ENTER)) {
+            if (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_UP))
+                optionSelect--;
+
+            
+            if (optionSelect < 0) optionSelect = 0;
+            if (optionSelect > 3) optionSelect = 3;
+
+            if (IsKeyPressed(KEY_ENTER) ||
+                (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN))) 
+            {
 
                 if (optionSelect == 0) {
                     currentScreen = GAMEPLAY;
                     PlayGameMusic();
                 }
-                else if (optionSelect == 1)
-                    currentScreen = CREDITS;
+                else if (optionSelect == 1) {
+                    currentScreen = CONTROLES;
+                    PlayGameMusic();
+                }
                 else if (optionSelect == 2)
+                    currentScreen = CREDITS;
+                else if (optionSelect == 3)
                     break;
             }
         
 
             BeginDrawing();
-            ClearBackground(RAYWHITE);
+            ClearBackground(WHITE);
 
             // Logo
-            DrawTexture(texLogo, SCREEN_WIDTH/2 - texLogo.width/2, 80, BLUE);
+            float escala = 0.45f;   // Ajusta este valor si lo quieres más grande o pequeño
+
+            int logoAncho = texLogo.width * escala;
+            int logoAlto  = texLogo.height * escala;
+
+            int posX = (SCREEN_WIDTH - logoAncho) / 2;
+            int posY = -60;
+
+            DrawTexturePro(
+                texLogo,
+                (Rectangle){ 0, 0, texLogo.width, texLogo.height },    // origen
+                (Rectangle){ posX, posY, logoAncho, logoAlto },        // destino escalado
+                (Vector2){ 0, 0 },
+                0.0f,
+                WHITE
+            );
 
             // Botones
-            int bx = SCREEN_WIDTH/2 - texButtonIdle.width/2;
-            int by = 350;
+            int bx = SCREEN_WIDTH/2 - texButtonIdle.width/7;
+            int by = 310;
 
-            for (int i=0;i<3;i++) {
+            for (int i=0;i<4;i++) {
 
                 Texture2D *btn = (i==optionSelect)
                     ? &texButtonSelected
                     : &texButtonIdle;
 
-                DrawTexture(*btn, bx, by + i*70, WHITE);
+                DrawTexture(*btn, bx, by + i*60, WHITE);
 
                 const char *label =
                     (i==0) ? "JUGAR" :
-                    (i==1) ? "CREDITOS" :
+                    (i==1) ? "CONTROLES" :
+                    (i==2) ? "CREDITOS" :
                              "SALIR";
 
-                DrawText(label, bx + 80, by + i*70 + 20, 24, BLACK);
+                DrawText(label, bx + 80, by + i*60 + 20, 24, BLACK);
             }
 
+            EndDrawing();
+            continue;
+        }
+
+        // ------------------------------
+        // Controles
+        // ------------------------------
+        if (currentScreen == CONTROLES) {
+
+            bool controller = IsGamepadAvailable(0);
+
+            if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
+            {
+                currentScreen = GAMEPLAY;
+            }
+
+            BeginDrawing();
+            ClearBackground(RAYWHITE);
+            DrawText("CONTROLES", 420, 80, 40, DARKBLUE);
+            DrawText("Controles Mando: joysticks(Movimiento), B/0(Disparo), \nA/X(Saltar), =(Pausa), X/O(Reiniciar Nivel), Boton Vista(Menu)", 150, 180, 24, BLACK);
+            DrawText("Controles Teclado: A(Izquierda), D(Derecha), ->(Disparo), \nSPACE(Saltar), P(pausa), R(Reiniciar Nivel), Tab(Menu)", 150, 280, 24, BLACK);
+            if (controller){
+            DrawText("Presiona A/X para continuar", SCREEN_WIDTH/2 - 220, 510, 20, GREEN);
+            DrawText("Presiona B/0 para continuar", SCREEN_WIDTH/2 - 220, 540, 20, RED);
+            }
+            else{
+            DrawText("Presiona Enter para continuar", SCREEN_WIDTH/2 - 220, 510, 20, GREEN);
+            DrawText("Presiona Backspace para continuar", SCREEN_WIDTH/2 - 220, 540, 20, RED);
+            }
+            if (IsKeyPressed(KEY_BACKSPACE)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)))
+            {
+                currentScreen = TITLE;
+            }
             EndDrawing();
             continue;
         }
@@ -632,13 +733,24 @@ int main(void) {
         // ------------------------------
         if (currentScreen == CREDITS) {
 
-            if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+            bool controller = IsGamepadAvailable(0);
+
+            if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
+            {
+                currentScreen = TITLE;
+            }
 
             BeginDrawing();
             ClearBackground(RAYWHITE);
             DrawText("CREDITOS", 420, 80, 40, DARKBLUE);
             DrawText("Desarrollador: Diego ", 350, 180, 24, BLACK);
+            if (controller){
+            DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
+            }
+            else{
             DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+            }
+
             EndDrawing();
             continue;
         }
@@ -648,8 +760,15 @@ int main(void) {
         // ------------------------------
         if (currentScreen == GAMEPLAY) {
 
-            if (IsKeyPressed(KEY_P)) pauseGame = !pauseGame;
-            if (IsKeyPressed(KEY_R)) ResetLevel();
+            bool controller = IsGamepadAvailable(0);
+
+            if (IsKeyPressed(KEY_P) || (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
+            {
+                pauseGame = !pauseGame;
+            }
+
+            if (IsKeyPressed(KEY_R)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_LEFT))) ResetLevel();
+            
 
             if (!pauseGame && !gameOver && !victory) {
                 UpdatePlayer(dt);
@@ -657,38 +776,85 @@ int main(void) {
                 UpdateCollectibles();
                 UpdateShoots(dt);
             }
+            if (IsKeyPressed(KEY_TAB)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT)))
+            {
+                currentScreen = TITLE;
+            }
+            if (IsKeyPressed(KEY_BACKSPACE)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)))
+            {
+                currentScreen = GAMEPLAY;
+            }
 
             // GAME OVER SCREEN
             if (gameOver) {
+                
+                bool controller = IsGamepadAvailable(0);
+
                 BeginDrawing();
                 ClearBackground(BLACK);
                 DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 40, 40, RED);
-                DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, WHITE);
-                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+                if (controller){
+                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
+                }
+                else{
+                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                }
+                if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
+                {
+                    currentScreen = TITLE;
+                }
+
                 EndDrawing();
                 continue;
             }
 
             // VICTORY SCREEN
             if (victory) {
+
+                bool controller = IsGamepadAvailable(0);
+
                 BeginDrawing();
                 ClearBackground(WHITE);
                 DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 40, 40, DARKGREEN);
-                DrawText("Presiona R para reiniciar", SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 + 10, 20, BLACK);
-                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
+                if (controller){
+                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("Boton Vista para regresar al menu", 360, 500, 20, GRAY);
+                }
+                else{
+                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                }
+                if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
+                {
+                    currentScreen = TITLE;
+                }
+
                 EndDrawing();
                 continue;
             }
 
             // PAUSA
             if (pauseGame) {
+
+                bool controller = IsGamepadAvailable(0);
+
                 BeginDrawing();
                 ClearBackground(BLACK);
+                
+                if (controller){
+                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
+                }
+                else{
                 DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
-                if (IsKeyPressed(KEY_ENTER)) currentScreen = TITLE;
                 DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                }
+                if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT)))
+                {
+                    currentScreen = TITLE;
+                }
                 EndDrawing();
                 continue;
             }
@@ -767,7 +933,12 @@ int main(void) {
 
             DrawText(TextFormat("Vidas: %d", player.lives), 20, 20, 24, BLACK);
             DrawText(TextFormat("Puntaje: %d", player.score), 20, 60, 24, BLACK);
-            DrawText("Controles: A(Izquierda), D(Derecha), ->(Disparo), SPACE(Saltar)", 20, 550, 22, BLACK);
+            if (controller){
+            DrawText("Gamepad conectado", 20, 520, 20, DARKGREEN);
+            }
+            else{
+            DrawText("Gamepad NO detectado", 20, 520, 20, RED);
+            }
 
 
             EndDrawing();
