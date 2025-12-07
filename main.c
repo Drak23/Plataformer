@@ -635,6 +635,7 @@ int main(void) {
             {
 
                 if (optionSelect == 0) {
+                    ResetLevel();  
                     currentScreen = GAMEPLAY;
                     PlayGameMusic();
                 }
@@ -759,6 +760,7 @@ int main(void) {
         // GAMEPLAY
         // ------------------------------
         if (currentScreen == GAMEPLAY) {
+            
 
             bool controller = IsGamepadAvailable(0);
 
@@ -792,20 +794,20 @@ int main(void) {
 
                 BeginDrawing();
                 ClearBackground(BLACK);
-                DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 40, 40, RED);
+                DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 60, 40, RED);
                 if (controller){
-                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
-                DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
+                DrawText("Reiniciar - Presiona X para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("Boton Vista para regresar al menu", 360, 500, 20, GRAY);
                 }
                 else{
-                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
-                DrawText("ENTER para regresar", 360, 500, 20, GRAY);
+                DrawText("Reiniciar - Presiona R para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("ENTER para regresar al menu", 360, 500, 20, GRAY);
                 }
                 if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
                 {
                     currentScreen = TITLE;
                 }
-
+                if (IsKeyPressed(KEY_R)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_LEFT))) ResetLevel();
                 EndDrawing();
                 continue;
             }
@@ -817,7 +819,7 @@ int main(void) {
 
                 BeginDrawing();
                 ClearBackground(WHITE);
-                DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 40, 40, DARKGREEN);
+                DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 60, 40, DARKGREEN);
                 if (controller){
                 DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("Boton Vista para regresar al menu", 360, 500, 20, GRAY);
@@ -934,10 +936,10 @@ int main(void) {
             DrawText(TextFormat("Vidas: %d", player.lives), 20, 20, 24, BLACK);
             DrawText(TextFormat("Puntaje: %d", player.score), 20, 60, 24, BLACK);
             if (controller){
-            DrawText("Gamepad conectado", 20, 520, 20, DARKGREEN);
+            DrawText("Mando conectado", 20, 520, 20, DARKGREEN);
             }
             else{
-            DrawText("Gamepad NO detectado", 20, 520, 20, RED);
+            DrawText("Mando NO detectado", 20, 520, 20, RED);
             }
 
 
