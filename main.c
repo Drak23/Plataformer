@@ -736,7 +736,7 @@ int main(void) {
 
             bool controller = IsGamepadAvailable(0);
 
-            if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT)))
+            if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)))
             {
                 currentScreen = TITLE;
             }
@@ -744,9 +744,9 @@ int main(void) {
             BeginDrawing();
             ClearBackground(RAYWHITE);
             DrawText("CREDITOS", 420, 80, 40, DARKBLUE);
-            DrawText("Desarrollador: Diego ", 350, 180, 24, BLACK);
+            DrawText("Desarrollador: Drak ", 350, 180, 24, BLACK);
             if (controller){
-            DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
+            DrawText("B para regresar", 360, 500, 20, GRAY);
             }
             else{
             DrawText("ENTER para regresar", 360, 500, 20, GRAY);
@@ -794,7 +794,7 @@ int main(void) {
 
                 BeginDrawing();
                 ClearBackground(BLACK);
-                DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 60, 40, RED);
+                DrawText("GAME OVER", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT/2 - 60, 50, RED);
                 if (controller){
                 DrawText("Reiniciar - Presiona X para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("Boton Vista para regresar al menu", 360, 500, 20, GRAY);
@@ -819,7 +819,7 @@ int main(void) {
 
                 BeginDrawing();
                 ClearBackground(WHITE);
-                DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 60, 40, DARKGREEN);
+                DrawText("VICTORIA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 60, 50, DARKGREEN);
                 if (controller){
                 DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("Boton Vista para regresar al menu", 360, 500, 20, GRAY);
@@ -844,18 +844,24 @@ int main(void) {
 
                 BeginDrawing();
                 ClearBackground(BLACK);
-                
+                DrawText("PAUSA", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 90, 50, BLUE);
                 if (controller){
-                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("PAUSA - Presiona = para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 40, 20, WHITE);
+                DrawText("Controles - Presiona Y para ver controles", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("Boton Vista para regresar", 360, 500, 20, GRAY);
                 }
                 else{
-                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
+                DrawText("PAUSA - Presiona P para continuar", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 40, 20, WHITE);
+                DrawText("Controles - Presiona C para ver controles", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 10, 20, WHITE);
                 DrawText("ENTER para regresar", 360, 500, 20, GRAY);
                 }
                 if (IsKeyPressed(KEY_ENTER)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT)))
                 {
                     currentScreen = TITLE;
+                }
+                if (IsKeyPressed(KEY_C)|| (controller && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_UP)))
+                {
+                    currentScreen = CONTROLES;
                 }
                 EndDrawing();
                 continue;
