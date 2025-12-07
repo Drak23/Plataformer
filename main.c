@@ -18,8 +18,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#if defined(PLATFORM_WEB)
-    #include <emscripten/emscripten.h>
+#if defined(PLATFORM_DESKTOP)
+   
 #endif
 
 #define SCREEN_WIDTH 1024
@@ -192,6 +192,12 @@ void LoadResources() {
     platformTex[2] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
     platformTex[3] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
     platformTex[4] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[5] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[6] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[7] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[8] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[9] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
+    platformTex[10] = LoadTexture("resources/Sprites/Plataformas/suelo.png");
 
     //Fondo nivel
     groundTex = LoadTexture("resources/Sprites/Plataformas/cielo.png");
@@ -214,6 +220,12 @@ void UnloadResources() {
     UnloadTexture(platformTex[2]);
     UnloadTexture(platformTex[3]);
     UnloadTexture(platformTex[4]);
+    UnloadTexture(platformTex[5]);
+    UnloadTexture(platformTex[6]);
+    UnloadTexture(platformTex[7]);
+    UnloadTexture(platformTex[8]);
+    UnloadTexture(platformTex[9]);
+    UnloadTexture(platformTex[10]);
 
     UnloadTexture(groundTex);
 
@@ -243,18 +255,35 @@ void ResetLevel() {
     collectibleCount = 0;
 
     //suelo
-    AddPlatform(-500,420,20000,1600,4);
+    AddPlatform(10,420,900,1600,4);
+    AddPlatform(1620,420,600,1600,4);
+    AddPlatform(2620,420,600,1600,4); 
+    AddPlatform(3920,420,600,1600,4); 
 
-    //Plataformas
-    AddPlatform(400,340,200,24,0);
-    AddPlatform(700,280,160,24,1);
-    AddPlatform(920,220,120,24,2);
-    AddPlatform(1120,220,120,24,3);
+    //AddPlatform(340,420,20,30,5);
+
+    //Plataformas(x,y,z,ancho,numero de plataforma)
+    AddPlatform(400,340,200,24,0);  //1
+    AddPlatform(700,280,160,24,1);  //2
+    AddPlatform(920,220,120,24,2);  //3
+    AddPlatform(1217,290,125,24,3); //4
+    AddPlatform(1520,230,120,24,5); //5
+    AddPlatform(2020,330,120,24,6); //6
+    AddPlatform(2300,250,120,24,7); //7
+    AddPlatform(3300,350,120,24,8); //8
+    AddPlatform(3500,260,120,24,9); //9
+    AddPlatform(3700,160,120,24,10); //10
 
     //Enemigos
-    AddEnemy(780,280);   // plataforma 1
-    AddEnemy(980,220);   // plataforma 2
-    AddEnemy(1180,220);   // plataforma 3
+    AddEnemy(1620,420);  // suelo 2
+    AddEnemy(1690,420);  // suelo 2
+    AddEnemy(2640,420);  // suelo 3
+    AddEnemy(2690,420);  // suelo 3
+    AddEnemy(3920,420);  // suelo 4
+    AddEnemy(3990,420);  // suelo 4
+    AddEnemy(780,280);   // Enemigo 1 (plataforma 2)
+    AddEnemy(980,220);   // Enemigo 2 (plataforma 3)
+    AddEnemy(1280,290);  // Enemigo 3(plataforma 4)
 
     AddCollectible(460,300);
     AddCollectible(730,240);
@@ -311,9 +340,9 @@ void UpdatePlayer(float dt) {
     }
 
         // Disparar
-    if (IsKeyDown(KEY_X)) {
-        shootRate++;
-        if (shootRate % 12 == 0) {
+    if (IsKeyPressed(KEY_RIGHT)) {
+        //shootRate++;
+        //if (shootRate % 12 == 0) {
             for (int i=0; i<NUM_SHOOTS; i++) {
                 if (!shoot[i].active) {
                     Rectangle box = GetPlayerBox(&player);
@@ -323,8 +352,9 @@ void UpdatePlayer(float dt) {
                     break;
                 }
             }
-        }
+        //}
     } else shootRate = 0;
+    
 
     // FÍSICAS
     player.vel.y += GRAVITY * dt;
@@ -663,7 +693,7 @@ int main(void) {
                 continue;
             }
             // WIN CONDITION
-            if (player.pos.x >= 3300 && !victory)
+            if (player.pos.x >= 4300 && !victory)
             victory = true;
 
             UpdatePlayerCamera(&camera, player.pos);
@@ -681,7 +711,7 @@ int main(void) {
 
                 Rectangle b = platforms[i].box;
 
-                if (platforms[i].type == 6) {
+                if (platforms[i].type == 11) {
                     DrawTexturePro(
                         groundTex,
                         (Rectangle){0,0, groundTex.width, groundTex.height},
@@ -700,7 +730,12 @@ int main(void) {
                     );
                 }
             }
-            DrawRectangle(-500,420,20000,1600,BROWN);
+            //Suelos
+            DrawRectangle(10,420,900,1600,BROWN);
+            DrawRectangle(1620,420,600,1600,BROWN);
+            DrawRectangle(2620,420,600,1600,BROWN);
+            DrawRectangle(3920,420,600,1600,BROWN);
+
 
             // ------------------------------
             // DIBUJAR ENEMIGOS ANIMADOS
@@ -725,13 +760,15 @@ int main(void) {
             // Jugador
             DrawPlayer(player.pos);
 
-            DrawRectangle(3300, 0, 8, 800, GREEN);
-            DrawText("META", 3290, -20, 20, BLACK);
+            DrawRectangle(4300, 0, 8, 800, GREEN);
+            DrawText("META", 4290, -20, 20, BLACK);
 
             EndMode2D();
 
             DrawText(TextFormat("Vidas: %d", player.lives), 20, 20, 24, BLACK);
             DrawText(TextFormat("Puntaje: %d", player.score), 20, 60, 24, BLACK);
+            DrawText("Controles: A(Izquierda), D(Derecha), ->(Disparo), SPACE(Saltar)", 20, 550, 22, BLACK);
+
 
             EndDrawing();
         }
